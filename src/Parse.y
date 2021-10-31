@@ -23,6 +23,8 @@ import Data.Char
     ')'     { TClose }
     '->'    { TArrow }
     VAR     { TVar $$ }
+    LET     { TLet }
+    IN      { TIn }
     TYPEE   { TTypeE }
     DEF     { TDef }
     
@@ -30,7 +32,8 @@ import Data.Char
 %right VAR
 %left '=' 
 %right '->'
-%right '\\' '.' 
+%right '\\' '.'
+%right LET IN
 
 %%
 
@@ -40,6 +43,7 @@ Defexp  : DEF VAR '=' Exp              { Def $2 $4 }
 
 Exp     :: { LamTerm }
         : '\\' VAR ':' Type '.' Exp    { LAbs $2 $4 $6 }
+        : LET VAR '=' Exp IN Exp       { LLet $2 $4 $6 }
         | NAbs                         { $1 }
         
 NAbs    :: { LamTerm }
@@ -96,6 +100,8 @@ data Token = TVar String
                | TColon
                | TArrow
                | TEquals
+               | TLet
+               | TIn
                | TEOF
                deriving Show
 
@@ -122,6 +128,8 @@ lexer cont s = case s of
                     where lexVar cs = case span isAlpha cs of
                               ("E",rest)    -> cont TTypeE rest
                               ("def",rest)  -> cont TDef rest
+                              ("let",rest)  -> cont TLet rest
+                              ("in",rest)  -> cont TIn rest
                               (var,rest)    -> cont (TVar var) rest
                           consumirBK anidado cl cont s = case s of
                               ('-':('-':cs)) -> consumirBK anidado cl cont $ dropWhile ((/=) '\n') cs
