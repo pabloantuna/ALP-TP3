@@ -36,7 +36,7 @@ module Common where
              | Free Name 
              | Term :@: Term
              | Lam Type Term
-             | Let Name Term Term
+             | Let Term Term
        deriving (Show, Eq)
 
   -- Valores
