@@ -23,10 +23,14 @@ import Data.Char
     ')'     { TClose }
     '->'    { TArrow }
     VAR     { TVar $$ }
-    LET     { TLet }
-    IN      { TIn }
     TYPEE   { TTypeE }
     DEF     { TDef }
+    LET     { TLet }
+    IN      { TIn }
+    TYPENAT { TTypeNat}
+    ZERO    { TZero }
+    SUC     { TSuc }
+    R       { TR }
     
 
 %right VAR
@@ -34,6 +38,7 @@ import Data.Char
 %right '->'
 %right '\\' '.'
 %right LET IN
+%nonassoc R
 
 %%
 
@@ -45,16 +50,26 @@ Exp     :: { LamTerm }
         : '\\' VAR ':' Type '.' Exp    { LAbs $2 $4 $6 }
         | LET VAR '=' Exp IN Exp       { LLet $2 $4 $6 }
         | NAbs                         { $1 }
-        
+
 NAbs    :: { LamTerm }
-        : NAbs Atom                    { LApp $1 $2 }
+        : R NAbs NAbs NAbs             { LR $2 $3 $4 }
+        | NAbsR                        { $1 }
+
+NAbsR   :: { LamTerm }
+        : SUC NAbsR                    { LSuc $2 }
+        | NAbsRSuc                     { $1 }
+
+NAbsRSuc    :: { LamTerm }
+        : NAbsRSuc Atom                { LApp $1 $2 }
         | Atom                         { $1 }
 
 Atom    :: { LamTerm }
-        : VAR                          { LVar $1 }  
+        : VAR                          { LVar $1 }
+        | ZERO                         { LZero }
         | '(' Exp ')'                  { $2 }
 
 Type    : TYPEE                        { EmptyT }
+        | TYPENAT                      { NatT }
         | Type '->' Type               { FunT $1 $3 }
         | '(' Type ')'                 { $2 }
 
@@ -102,6 +117,10 @@ data Token = TVar String
                | TEquals
                | TLet
                | TIn
+               | TTypeNat
+               | TZero
+               | TSuc
+               | TR
                | TEOF
                deriving Show
 
@@ -112,6 +131,7 @@ lexer cont s = case s of
                     (c:cs)
                           | isSpace c -> lexer cont cs
                           | isAlpha c -> lexVar (c:cs)
+                    ('0':cs) -> cont TZero cs
                     ('-':('-':cs)) -> lexer cont $ dropWhile ((/=) '\n') cs
                     ('{':('-':cs)) -> consumirBK 0 0 cont cs	
                     ('-':('}':cs)) -> \ line -> Failed $ "Línea "++(show line)++": Comentario no abierto"
@@ -130,6 +150,9 @@ lexer cont s = case s of
                               ("def",rest)  -> cont TDef rest
                               ("let",rest)  -> cont TLet rest
                               ("in",rest)  -> cont TIn rest
+                              ("Nat",rest) -> cont TTypeNat rest
+                              ("R", rest) -> cont TR rest
+                              ("Suc", rest) -> cont TSuc rest
                               (var,rest)    -> cont (TVar var) rest
                           consumirBK anidado cl cont s = case s of
                               ('-':('-':cs)) -> consumirBK anidado cl cont $ dropWhile ((/=) '\n') cs

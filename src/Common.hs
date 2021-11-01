@@ -18,9 +18,9 @@ module Common where
   type NameEnv v t = [(Name, (v, t))]
 
   -- Tipo de los tipos
-  data Type = EmptyT 
+  data Type = EmptyT
+            | NatT 
             | FunT Type Type
-
             deriving (Show, Eq)
   
   -- Términos con nombres
@@ -28,6 +28,9 @@ module Common where
                 |  LAbs String Type LamTerm
                 |  LApp LamTerm LamTerm
                 |  LLet String LamTerm LamTerm
+                |  LZero
+                |  LSuc LamTerm
+                |  LR LamTerm LamTerm LamTerm
        deriving (Show, Eq)
 
 
@@ -37,11 +40,18 @@ module Common where
              | Term :@: Term
              | Lam Type Term
              | Let Term Term
+             | Zero
+             | Suc Term
+             | R Term Term Term
        deriving (Show, Eq)
 
   -- Valores
   data Value = VLam Type Term 
-          deriving (Show, Eq)
+             | VNat NV
+       deriving (Show, Eq)
+
+  data NV = NVZero | NVSucc NV
+       deriving (Show, Eq)
 
   -- Contextos del tipado
   type Context = [Type]
