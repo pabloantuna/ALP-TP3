@@ -27,17 +27,17 @@ pp ii vs (Bound k         ) = text (vs !! (ii - k - 1))
 pp _  _  (Free  (Global s)) = text s
 
 pp ii vs (i :@: c         ) = sep
-  [ parensIf (isLam i) (pp ii vs i)
-  , nest 1 (parensIf (isLam c || isApp c) (pp ii vs c))
+  [ parensIf (isLam i || isR i) (pp ii vs i)
+  , nest 1 (parensIf (isLam c || isApp c || isR c) (pp ii vs c))
   ]
 pp ii vs (Lam t c) =
   text "\\"
     <> text (vs !! ii)
-    <> text ":"
+    <> text ": "
     <> printType t
     <> text ". "
     <> pp (ii + 1) vs c
-pp ii vs (Let t1 t2) = 
+pp ii vs (Let t1 t2) =
   text "let "
     <> text (vs !! ii)
     <> text " = "
@@ -46,7 +46,13 @@ pp ii vs (Let t1 t2) =
     <> pp (ii + 1) vs t2
 pp ii vs Zero = text "0"
 pp ii vs (Suc n) = text "Suc " <> parens (pp ii vs n)
-pp ii vs (R t1 t2 t3) = text "R " <> parens (pp ii vs t1) <> parens (pp ii vs t2) <> parens (pp ii vs t3)
+pp ii vs (R t1 t2 t3) =
+  text "R "
+    <> parensIf (isLam t1 || isApp t1) (pp ii vs t1)
+    <> text " "
+    <> parensIf (isLam t2 || isApp t2) (pp ii vs t2)
+    <> text " "
+    <> parensIf (isLam t3 || isApp t3) (pp ii vs t3)
 
 isLam :: Term -> Bool
 isLam (Lam _ _) = True
@@ -55,6 +61,10 @@ isLam _         = False
 isApp :: Term -> Bool
 isApp (_ :@: _) = True
 isApp _         = False
+
+isR :: Term -> Bool
+isR R {} = True
+isR _    = False
 
 -- pretty-printer de tipos
 printType :: Type -> Doc
@@ -80,5 +90,5 @@ fv (R te te' te2) = fv te ++ fv te' ++ fv te2
 
 ---
 printTerm :: Term -> Doc
-printTerm t = pp 0 (filter (\v -> not $ elem v (fv t)) vars) t
+printTerm t = pp 0 (filter (\v -> v `notElem` (fv t)) vars) t
 

@@ -36,9 +36,9 @@ import Data.Char
 %right VAR
 %left '=' 
 %right '->'
-%right '\\' '.'
-%right LET IN
-%nonassoc R
+%right '\\' '.' LET IN
+%right R
+%right SUC
 
 %%
 
@@ -49,24 +49,18 @@ Defexp  : DEF VAR '=' Exp              { Def $2 $4 }
 Exp     :: { LamTerm }
         : '\\' VAR ':' Type '.' Exp    { LAbs $2 $4 $6 }
         | LET VAR '=' Exp IN Exp       { LLet $2 $4 $6 }
+        | SUC Exp                      { LSuc $2 }
+        | R Atom Atom Atom             { LR $2 $3 $4 }
         | NAbs                         { $1 }
 
 NAbs    :: { LamTerm }
-        : R NAbs NAbs NAbs             { LR $2 $3 $4 }
-        | NAbsR                        { $1 }
-
-NAbsR   :: { LamTerm }
-        : SUC NAbsR                    { LSuc $2 }
-        | NAbsRSuc                     { $1 }
-
-NAbsRSuc    :: { LamTerm }
-        : NAbsRSuc Atom                { LApp $1 $2 }
+        : NAbs Atom                    { LApp $1 $2 }
         | Atom                         { $1 }
 
 Atom    :: { LamTerm }
         : VAR                          { LVar $1 }
-        | ZERO                         { LZero }
         | '(' Exp ')'                  { $2 }
+        | ZERO                         { LZero }
 
 Type    : TYPEE                        { EmptyT }
         | TYPENAT                      { NatT }
