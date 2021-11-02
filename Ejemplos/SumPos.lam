@@ -1,0 +1,3 @@
+def mapSuc = \l: ListNat. RL Nil (\x: Nat. \xs: ListNat. \r: ListNat. Cons (Suc x) r) l
+
+def sumPos = \l: ListNat. RL Nil (\x: Nat.\xs: ListNat.\r: ListNat. mapSuc (Cons x r)) l
