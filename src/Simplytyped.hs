@@ -21,13 +21,16 @@ conversion :: LamTerm -> Term
 conversion = conversion' []
 
 conversion' :: [String] -> LamTerm -> Term
-conversion' b (LVar n    )    = maybe (Free (Global n)) Bound (n `elemIndex` b)
-conversion' b (LApp t u  )    = conversion' b t :@: conversion' b u
-conversion' b (LAbs n t u)    = Lam t (conversion' (n : b) u)
-conversion' b (LLet n t1 t2)  = Let (conversion' b t1) (conversion' (n:b) t2)
-conversion' b LZero           = Zero
-conversion' b (LSuc lt)       = Suc $ conversion' b lt
-conversion' b (LR lt lt' lt2) = R (conversion' b lt) (conversion' b lt') (conversion' b lt2)
+conversion' b (LVar n    )     = maybe (Free (Global n)) Bound (n `elemIndex` b)
+conversion' b (LApp t u  )     = conversion' b t :@: conversion' b u
+conversion' b (LAbs n t u)     = Lam t (conversion' (n : b) u)
+conversion' b (LLet n t1 t2)   = Let (conversion' b t1) (conversion' (n:b) t2)
+conversion' b LZero            = Zero
+conversion' b (LSuc lt)        = Suc $ conversion' b lt
+conversion' b (LR lt lt' lt2)  = R (conversion' b lt) (conversion' b lt') (conversion' b lt2)
+conversion' b LNil             = Nil
+conversion' b (LCons lt lt')   = Cons (conversion' b lt) (conversion' b lt')
+conversion' b (LRL lt lt' lt2) = RL (conversion' b lt) (conversion' b lt') (conversion' b lt2)
 
 
 -----------------------
@@ -44,6 +47,9 @@ sub i t (Let t1 t2)           = Let (sub i t t1) (sub (i + 1) t t2)
 sub i t Zero                  = Zero
 sub i t (Suc t')              = Suc $ sub i t t'
 sub i t (R t1 t2 t3)          = R (sub i t t1) (sub i t t2) (sub i t t3)
+sub i t Nil                   = Nil
+sub i t (Cons te te')         = Cons (sub i t te) (sub i t te')
+sub i t (RL t1 t2 t3)         = RL (sub i t t1) (sub i t t2) (sub i t t3)
 
 -- evaluador de términos
 eval :: NameEnv Value Type -> Term -> Value
@@ -60,10 +66,20 @@ eval e Zero                   = VNat NVZero
 eval e (Suc te)               = case eval e te of
   VNat n -> VNat (NVSucc n)
   _      -> error "Error de tipo en run-time, verificar type checker"
-eval e (R t1 t2 t3)         = case eval e t3 of
+eval e (R t1 t2 t3)           = case eval e t3 of
   VNat NVZero     -> eval e t1
   VNat (NVSucc n) -> let q = quote (VNat n) in eval e ((t2 :@: R t1 t2 q) :@: q)
   _               -> error "Error de tipo en run-time, verificar type checker"
+eval e Nil                    = VList LVNil
+eval e (Cons t1 t2)          = case eval e t1 of
+  VNat nv -> case eval e t2 of
+              VList lv -> VList (LVCons (VNat nv) lv)
+              _        -> error "Error de tipo en run-time, verificar type checker"  
+  _       -> error "Error de tipo en run-time, verificar type checker"
+eval e (RL t1 t2 t3)        = case eval e t3 of
+  VList LVNil         -> eval e t1
+  VList (LVCons n lv) -> let q = quote (VList lv) in eval e (((t2 :@: quote n) :@: q) :@: RL t1 t2 q)
+  _                   -> error "Error de tipo en run-time, verificar type checker"
 
 
 -----------------------
@@ -71,9 +87,11 @@ eval e (R t1 t2 t3)         = case eval e t3 of
 -----------------------
 
 quote :: Value -> Term
-quote (VLam t f)         = Lam t f
-quote (VNat NVZero)      = Zero
-quote (VNat (NVSucc nv)) = Suc (quote (VNat nv))
+quote (VLam t f)              = Lam t f
+quote (VNat NVZero)           = Zero
+quote (VNat (NVSucc nv))      = Suc (quote (VNat nv))
+quote (VList LVNil)           = Nil
+quote (VList (LVCons nv lv')) = Cons (quote nv) (quote (VList lv'))
 
 ----------------------
 --- type checker
@@ -111,22 +129,22 @@ notfoundError :: Name -> Either String Type
 notfoundError n = err $ show n ++ " no está definida."
 
 infer' :: Context -> NameEnv Value Type -> Term -> Either String Type
-infer' c _ (Bound i) = ret (c !! i)
-infer' _ e (Free  n) = case lookup n e of
+infer' c _ (Bound i)       = ret (c !! i)
+infer' _ e (Free  n)       = case lookup n e of
   Nothing     -> notfoundError n
   Just (_, t) -> ret t
-infer' c e (t :@: u) = infer' c e t >>= \tt -> infer' c e u >>= \tu ->
+infer' c e (t :@: u)       = infer' c e t >>= \tt -> infer' c e u >>= \tu ->
   case tt of
     FunT t1 t2 -> if (tu == t1) then ret t2 else matchError t1 tu
     _          -> notfunError tt
-infer' c e (Lam t u) = infer' (t : c) e u >>= \tu -> ret $ FunT t tu
-infer' c e (Let t1 t2) = infer' c e t1 >>= \tt1 -> infer' (tt1 : c) e t2
-infer' c e Zero = ret NatT
-infer' c e (Suc te) = infer' c e te >>= \tte ->
+infer' c e (Lam t u)       = infer' (t : c) e u >>= \tu -> ret $ FunT t tu
+infer' c e (Let t1 t2)     = infer' c e t1 >>= \tt1 -> infer' (tt1 : c) e t2
+infer' c e Zero            = ret NatT
+infer' c e (Suc te)        = infer' c e te >>= \tte ->
   case tte of
     NatT -> ret NatT
     _ -> matchError NatT tte
-infer' c e (R t1 t2 t3) = infer' c e t1 >>= (\tt1 -> infer' c e t2 >>= (\tt2 -> infer' c e t3 >>= (\tt3 ->
+infer' c e (R t1 t2 t3)    = infer' c e t1 >>= (\tt1 -> infer' c e t2 >>= (\tt2 -> infer' c e t3 >>= (\tt3 ->
   case tt2 of
     FunT f1 (FunT NatT f3)
       | tt1 /= f1 -> matchError tt1 f1
@@ -134,5 +152,18 @@ infer' c e (R t1 t2 t3) = infer' c e t1 >>= (\tt1 -> infer' c e t2 >>= (\tt2 -> 
       | otherwise -> if tt3 == NatT then ret tt1 else matchError NatT tt3
     x -> matchError (FunT tt1 (FunT NatT tt1)) x
   )))
+infer' c e Nil             = ret ListNat
+infer' c e (Cons t1 t2)   = infer' c e t1 >>= (\tt1 -> 
+  case tt1 of
+    NatT -> infer' c e t2 >>= (\tt2 -> if tt2 == ListNat then ret tt2 else matchError ListNat tt2)
+    _ -> matchError NatT tt1
+    )
+infer' c e (RL t1 t2 t3) = infer' c e t1 >>= (\tt1 -> infer' c e t2 >>= (\tt2 ->
+  case tt2 of
+    FunT NatT (FunT ListNat (FunT f1 f2))
+      | tt1 /= f1 -> matchError tt1 f1
+      | tt1 == f1 && tt1 /= f2 -> matchError tt1 f2
+      | otherwise -> infer' c e t3 >>= (\tt3 -> if tt3 == ListNat then ret tt1 else matchError ListNat tt3)
+    _ -> matchError (FunT NatT (FunT ListNat (FunT tt1 tt1))) tt2))
 ----------------------------------
  
