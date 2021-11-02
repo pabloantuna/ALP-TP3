@@ -15,22 +15,27 @@ import Data.Char
 %lexer {lexer} {TEOF}
 
 %token
-    '='     { TEquals }
-    ':'     { TColon }
-    '\\'    { TAbs }
-    '.'     { TDot }
-    '('     { TOpen }
-    ')'     { TClose }
-    '->'    { TArrow }
-    VAR     { TVar $$ }
-    TYPEE   { TTypeE }
-    DEF     { TDef }
-    LET     { TLet }
-    IN      { TIn }
-    TYPENAT { TTypeNat}
-    ZERO    { TZero }
-    SUC     { TSuc }
-    R       { TR }
+    '='            { TEquals }
+    ':'            { TColon }
+    '\\'           { TAbs }
+    '.'            { TDot }
+    '('            { TOpen }
+    ')'            { TClose }
+    '->'           { TArrow }
+    VAR            { TVar $$ }
+    TYPEE          { TTypeE }
+    DEF            { TDef }
+    LET            { TLet }
+    IN             { TIn }
+    TYPENAT        { TTypeNat}
+    ZERO           { TZero }
+    SUC            { TSuc }
+    R              { TR }
+    NUM            { TNum $$ }
+    TYPELISTNAT    { TTypeListNat }
+    NIL            { TNil }
+    CONS           { TCons }
+    RL             { TRL }
     
 
 %right VAR
@@ -38,6 +43,8 @@ import Data.Char
 %right '->'
 %right '\\' '.' LET IN
 %right R
+%right RL
+%right CONS
 %right SUC
 
 %%
@@ -51,6 +58,8 @@ Exp     :: { LamTerm }
         | LET VAR '=' Exp IN Exp       { LLet $2 $4 $6 }
         | SUC Exp                      { LSuc $2 }
         | R Atom Atom Atom             { LR $2 $3 $4 }
+        | CONS Atom Atom               { LCons $2 $3 }
+        | RL Atom Atom Atom            { LRL $2 $3 $4 }
         | NAbs                         { $1 }
 
 NAbs    :: { LamTerm }
@@ -59,11 +68,14 @@ NAbs    :: { LamTerm }
 
 Atom    :: { LamTerm }
         : VAR                          { LVar $1 }
+        | NUM                          { fromNat $1 }
         | '(' Exp ')'                  { $2 }
         | ZERO                         { LZero }
+        | NIL                          { LNil }
 
 Type    : TYPEE                        { EmptyT }
         | TYPENAT                      { NatT }
+        | TYPELISTNAT                  { ListNat }
         | Type '->' Type               { FunT $1 $3 }
         | '(' Type ')'                 { $2 }
 
@@ -99,7 +111,12 @@ catchP m k = \s l -> case m s l of
 happyError :: P a
 happyError = \ s i -> Failed $ "Línea "++(show (i::LineNumber))++": Error de parseo\n"++(s)
 
+fromNat :: Int -> LamTerm
+fromNat 0 = LZero
+fromNat x = LSuc $ fromNat (x-1)
+
 data Token = TVar String
+               | TNum Int
                | TTypeE
                | TDef
                | TAbs
@@ -115,6 +132,10 @@ data Token = TVar String
                | TZero
                | TSuc
                | TR
+               | TTypeListNat
+               | TNil
+               | TCons
+               | TRL
                | TEOF
                deriving Show
 
@@ -123,8 +144,9 @@ lexer cont s = case s of
                     [] -> cont TEOF []
                     ('\n':s)  ->  \line -> lexer cont s (line + 1)
                     (c:cs)
-                          | isSpace c -> lexer cont cs
-                          | isAlpha c -> lexVar (c:cs)
+                          | isSpace c  -> lexer cont cs
+                          | isAlpha c  -> lexVar (c:cs)
+                          | isNumber c -> lexNat (c:cs)
                     ('0':cs) -> cont TZero cs
                     ('-':('-':cs)) -> lexer cont $ dropWhile ((/=) '\n') cs
                     ('{':('-':cs)) -> consumirBK 0 0 cont cs	
@@ -147,6 +169,10 @@ lexer cont s = case s of
                               ("Nat",rest) -> cont TTypeNat rest
                               ("R", rest) -> cont TR rest
                               ("Suc", rest) -> cont TSuc rest
+                              ("ListNat", rest) -> cont TTypeListNat rest
+                              ("Nil", rest) -> cont TNil rest
+                              ("Cons", rest) -> cont TCons rest
+                              ("RL", rest) -> cont TRL rest
                               (var,rest)    -> cont (TVar var) rest
                           consumirBK anidado cl cont s = case s of
                               ('-':('-':cs)) -> consumirBK anidado cl cont $ dropWhile ((/=) '\n') cs
@@ -155,7 +181,9 @@ lexer cont s = case s of
                                                   0 -> \line -> lexer cont cs (line+cl)
                                                   _ -> consumirBK (anidado-1) cl cont cs
                               ('\n':cs) -> consumirBK anidado (cl+1) cont cs
-                              (_:cs) -> consumirBK anidado cl cont cs     
+                              (_:cs) -> consumirBK anidado cl cont cs
+                          lexNat cs = case span isNumber cs of
+                              (num, rest) -> cont (TNum $ read num) rest
                                            
 stmts_parse s = parseStmts s 1
 stmt_parse s = parseStmt s 1
