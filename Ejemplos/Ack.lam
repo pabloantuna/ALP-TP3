@@ -1,14 +1,3 @@
-def uno = Suc 0
-def dos = Suc uno
-def tres = Suc dos
-def cuatro = Suc tres
-def cinco = Suc cuatro
-def seis = Suc cinco
-def siete = Suc seis
-def ocho = Suc siete
-def nueve = Suc ocho
-def diez = Suc nueve
+def AckAux = \f: Nat -> Nat. \n: Nat. (R (f 1) (\r: Nat.\i: Nat. f r) n)
 
-def Ack' = \f: Nat -> Nat. \n: Nat. (R (f uno) (\r: Nat.\i: Nat. f r) n)
-
-def Ack = \m: Nat. R (\x: Nat. Suc x) (\f: Nat -> Nat.\i: Nat. Ack' f) m
+def Ack = \m: Nat. R (\x: Nat. Suc x) (\f: Nat -> Nat.\i: Nat. AckAux f) m
