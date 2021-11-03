@@ -36,6 +36,9 @@ import Data.Char
     NIL            { TNil }
     CONS           { TCons }
     RL             { TRL }
+    '['            { TOpenBracket }
+    ']'            { TCloseBracket }
+    ','            { TComma }
     
 
 %right VAR
@@ -70,8 +73,14 @@ Atom    :: { LamTerm }
         : VAR                          { LVar $1 }
         | NUM                          { fromNat $1 }
         | '(' Exp ')'                  { $2 }
+        | '[' Arr ']'                  { $2 }
         | ZERO                         { LZero }
         | NIL                          { LNil }
+
+Arr     :: { LamTerm }
+        :                              { LNil }
+        | Exp                          { LCons $1 LNil }
+        | Exp ',' Arr                  { LCons $1 $3 }
 
 Type    : TYPEE                        { EmptyT }
         | TYPENAT                      { NatT }
@@ -136,6 +145,9 @@ data Token = TVar String
                | TNil
                | TCons
                | TRL
+               | TOpenBracket
+               | TCloseBracket
+               | TComma
                | TEOF
                deriving Show
 
@@ -159,6 +171,9 @@ lexer cont s = case s of
                     (')':cs) -> cont TClose cs
                     (':':cs) -> cont TColon cs
                     ('=':cs) -> cont TEquals cs
+                    ('[':cs) -> cont TOpenBracket cs
+                    (']':cs) -> cont TCloseBracket cs
+                    (',':cs) -> cont TComma cs
                     unknown -> \line -> Failed $ 
                      "Línea "++(show line)++": No se puede reconocer "++(show $ take 10 unknown)++ "..."
                     where lexVar cs = case span isAlpha cs of
